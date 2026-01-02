@@ -1,0 +1,280 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { 
+  TreeDeciduous, Bird, Fish, Rabbit, Squirrel, Cat,
+  Sparkles, Lock, Check, Zap, Star
+} from 'lucide-react';
+
+import VirtualPlanet from '../components/planet/VirtualPlanet';
+
+const UNLOCKABLES = {
+  trees: [
+    { id: 'oak', name: 'Oak Tree', cost: 50, icon: TreeDeciduous },
+    { id: 'pine', name: 'Pine Tree', cost: 75, icon: TreeDeciduous },
+    { id: 'cherry', name: 'Cherry Blossom', cost: 100, icon: TreeDeciduous },
+    { id: 'palm', name: 'Palm Tree', cost: 150, icon: TreeDeciduous },
+    { id: 'baobab', name: 'Baobab', cost: 250, icon: TreeDeciduous },
+  ],
+  animals: [
+    { id: 'bird', name: 'Songbird', cost: 100, icon: Bird },
+    { id: 'fish', name: 'Rainbow Fish', cost: 150, icon: Fish },
+    { id: 'squirrel', name: 'Red Squirrel', cost: 200, icon: Squirrel },
+    { id: 'rabbit', name: 'Wild Rabbit', cost: 250, icon: Rabbit },
+    { id: 'fox', name: 'Forest Fox', cost: 500, icon: Cat },
+  ]
+};
+
+const PLANET_LEVELS = [
+  { level: 1, name: 'Seedling', minPoints: 0, perks: 'Basic planet' },
+  { level: 2, name: 'Sprout', minPoints: 500, perks: 'Clouds appear' },
+  { level: 3, name: 'Sapling', minPoints: 1500, perks: 'More greenery' },
+  { level: 4, name: 'Young Tree', minPoints: 3000, perks: 'Animals unlocked' },
+  { level: 5, name: 'Flourishing', minPoints: 5000, perks: 'Aurora effects' },
+  { level: 6, name: 'Thriving', minPoints: 10000, perks: 'Golden trees' },
+  { level: 7, name: 'Paradise', minPoints: 20000, perks: 'Legendary status' },
+];
+
+export default function Planet() {
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState(null);
+  const [selectedTab, setSelectedTab] = useState('overview');
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await base44.auth.me();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
+
+  const { data: profile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
+      return profiles[0] || null;
+    },
+    enabled: !!user
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: async ({ type, item }) => {
+      if (!profile) return;
+      
+      const newPoints = (profile.eco_points || 0) - item.cost;
+      const updates = { eco_points: newPoints };
+      
+      if (type === 'trees') {
+        updates.trees_planted = (profile.trees_planted || 0) + 1;
+      } else {
+        const currentAnimals = profile.animals_unlocked || [];
+        if (!currentAnimals.includes(item.id)) {
+          updates.animals_unlocked = [...currentAnimals, item.id];
+        }
+      }
+      
+      await base44.entities.UserProfile.update(profile.id, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['userProfile']);
+    }
+  });
+
+  const ecoPoints = profile?.eco_points || 0;
+  const trees = profile?.trees_planted || 0;
+  const animals = profile?.animals_unlocked || [];
+  const planetHealth = Math.min(100, 50 + ecoPoints / 50);
+  
+  const currentLevel = PLANET_LEVELS.reduce((acc, level) => 
+    ecoPoints >= level.minPoints ? level : acc
+  , PLANET_LEVELS[0]);
+  
+  const nextLevel = PLANET_LEVELS.find(l => l.minPoints > ecoPoints);
+  const progressToNext = nextLevel 
+    ? ((ecoPoints - currentLevel.minPoints) / (nextLevel.minPoints - currentLevel.minPoints)) * 100
+    : 100;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-indigo-950 via-purple-900 to-emerald-900 text-white">
+      {/* Stars background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        {Array.from({ length: 50 }).map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 bg-white rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+            }}
+            animate={{ opacity: [0.2, 1, 0.2] }}
+            transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
+          />
+        ))}
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 mb-4">
+            <Star className="w-3 h-3 mr-1" />
+            Level {currentLevel.level} • {currentLevel.name}
+          </Badge>
+          <h1 className="text-3xl md:text-4xl font-black mb-2">Your Planet</h1>
+          <p className="text-white/60">Watch your world flourish with every eco-action</p>
+        </motion.div>
+
+        {/* Main Planet View */}
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+          {/* Planet */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center"
+          >
+            <VirtualPlanet 
+              planetHealth={planetHealth}
+              trees={trees}
+              animals={animals}
+              ecoPoints={ecoPoints}
+              size="large"
+            />
+            
+            {/* Level Progress */}
+            <Card className="w-full max-w-sm mt-8 p-5 bg-white/10 backdrop-blur-sm border-white/20">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-sm text-white/70">Progress to Level {nextLevel?.level || 'MAX'}</span>
+                <span className="text-sm font-bold text-emerald-400">{ecoPoints.toLocaleString()} pts</span>
+              </div>
+              <Progress value={progressToNext} className="h-3 bg-white/20" />
+              {nextLevel && (
+                <p className="text-xs text-white/50 mt-2 text-center">
+                  {(nextLevel.minPoints - ecoPoints).toLocaleString()} more points to unlock: {nextLevel.perks}
+                </p>
+              )}
+            </Card>
+          </motion.div>
+
+          {/* Shop & Stats */}
+          <div className="space-y-6">
+            {/* Points Balance */}
+            <Card className="p-5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border-emerald-500/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/30 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-white/60">Available Points</p>
+                    <p className="text-2xl font-black text-emerald-400">{ecoPoints.toLocaleString()}</p>
+                  </div>
+                </div>
+                <Sparkles className="w-8 h-8 text-emerald-400/30" />
+              </div>
+            </Card>
+
+            {/* Trees Shop */}
+            <Card className="p-5 bg-white/10 backdrop-blur-sm border-white/20">
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <TreeDeciduous className="w-5 h-5 text-emerald-400" />
+                Plant Trees ({trees} planted)
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {UNLOCKABLES.trees.map((tree) => {
+                  const canAfford = ecoPoints >= tree.cost;
+                  const Icon = tree.icon;
+                  
+                  return (
+                    <motion.button
+                      key={tree.id}
+                      onClick={() => canAfford && unlockMutation.mutate({ type: 'trees', item: tree })}
+                      disabled={!canAfford || unlockMutation.isPending}
+                      className={`
+                        p-4 rounded-xl text-left transition-all
+                        ${canAfford 
+                          ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 cursor-pointer' 
+                          : 'bg-white/5 border border-white/10 opacity-50 cursor-not-allowed'
+                        }
+                      `}
+                      whileHover={canAfford ? { scale: 1.02 } : {}}
+                      whileTap={canAfford ? { scale: 0.98 } : {}}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <Icon className={`w-6 h-6 ${canAfford ? 'text-emerald-400' : 'text-white/30'}`} />
+                        <span className="font-semibold">{tree.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm">
+                        <Zap className="w-3 h-3 text-yellow-400" />
+                        <span className={canAfford ? 'text-yellow-400' : 'text-white/30'}>{tree.cost}</span>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Animals Shop */}
+            <Card className="p-5 bg-white/10 backdrop-blur-sm border-white/20">
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Bird className="w-5 h-5 text-sky-400" />
+                Unlock Animals ({animals.length} species)
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {UNLOCKABLES.animals.map((animal) => {
+                  const isOwned = animals.includes(animal.id);
+                  const canAfford = ecoPoints >= animal.cost;
+                  const Icon = animal.icon;
+                  
+                  return (
+                    <motion.button
+                      key={animal.id}
+                      onClick={() => canAfford && !isOwned && unlockMutation.mutate({ type: 'animals', item: animal })}
+                      disabled={isOwned || !canAfford || unlockMutation.isPending}
+                      className={`
+                        p-4 rounded-xl text-left transition-all relative
+                        ${isOwned 
+                          ? 'bg-emerald-500/30 border border-emerald-500/50' 
+                          : canAfford
+                            ? 'bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 cursor-pointer'
+                            : 'bg-white/5 border border-white/10 opacity-50 cursor-not-allowed'
+                        }
+                      `}
+                      whileHover={canAfford && !isOwned ? { scale: 1.02 } : {}}
+                      whileTap={canAfford && !isOwned ? { scale: 0.98 } : {}}
+                    >
+                      {isOwned && (
+                        <div className="absolute top-2 right-2">
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 mb-2">
+                        <Icon className={`w-6 h-6 ${isOwned ? 'text-emerald-400' : canAfford ? 'text-sky-400' : 'text-white/30'}`} />
+                        <span className="font-semibold">{animal.name}</span>
+                      </div>
+                      {isOwned ? (
+                        <span className="text-sm text-emerald-400">Owned</span>
+                      ) : (
+                        <div className="flex items-center gap-1 text-sm">
+                          <Zap className="w-3 h-3 text-yellow-400" />
+                          <span className={canAfford ? 'text-yellow-400' : 'text-white/30'}>{animal.cost}</span>
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
