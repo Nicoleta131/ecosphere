@@ -1,0 +1,86 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Flame, Star, Sparkles } from 'lucide-react';
+
+export default function StreakBanner({ streak = 0, longestStreak = 0 }) {
+  const isHotStreak = streak >= 7;
+  const isBurningStreak = streak >= 14;
+  const isLegendary = streak >= 30;
+
+  const getStreakMessage = () => {
+    if (isLegendary) return "🏆 Legendary! You're unstoppable!";
+    if (isBurningStreak) return "🔥 On fire! Keep the momentum!";
+    if (isHotStreak) return "⚡ Amazing streak! Don't break it!";
+    if (streak >= 3) return "✨ Great progress! Keep going!";
+    if (streak === 1) return "🌱 Day 1 - Great start!";
+    return "Start your streak today!";
+  };
+
+  return (
+    <motion.div
+      className={`
+        relative overflow-hidden rounded-2xl p-6
+        ${isLegendary 
+          ? 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500' 
+          : isBurningStreak 
+            ? 'bg-gradient-to-r from-orange-500 to-red-500'
+            : isHotStreak
+              ? 'bg-gradient-to-r from-orange-400 to-orange-600'
+              : 'bg-gradient-to-r from-amber-400 to-orange-500'
+        }
+      `}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      {/* Animated background elements */}
+      <motion.div
+        className="absolute top-0 right-0 w-40 h-40"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+      >
+        <Star className="w-full h-full text-white/10" />
+      </motion.div>
+      
+      {isHotStreak && (
+        <motion.div
+          className="absolute top-2 right-12"
+          animate={{ y: [-5, 5, -5], opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <Sparkles className="w-6 h-6 text-yellow-200" />
+        </motion.div>
+      )}
+
+      <div className="relative z-10 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <motion.div
+            className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center"
+            animate={isHotStreak ? { scale: [1, 1.1, 1] } : {}}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            <Flame className="w-10 h-10 text-white drop-shadow-lg" />
+          </motion.div>
+          
+          <div>
+            <motion.div 
+              className="text-4xl font-black text-white"
+              key={streak}
+              initial={{ scale: 1.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+            >
+              {streak}
+            </motion.div>
+            <p className="text-white/80 font-medium">Day Streak</p>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <p className="text-white text-sm font-medium">{getStreakMessage()}</p>
+          <p className="text-white/60 text-xs mt-1">
+            Best: {longestStreak} days
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
