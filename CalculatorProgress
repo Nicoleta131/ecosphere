@@ -1,0 +1,66 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Home, Car, ShoppingBag, Check } from 'lucide-react';
+
+const steps = [
+  { id: 'housing', label: 'Housing', icon: Home },
+  { id: 'transport', label: 'Transport', icon: Car },
+  { id: 'lifestyle', label: 'Lifestyle', icon: ShoppingBag }
+];
+
+export default function CalculatorProgress({ currentStep, completedSteps = [] }) {
+  return (
+    <div className="flex items-center justify-between w-full max-w-md mx-auto mb-8">
+      {steps.map((step, index) => {
+        const isCompleted = completedSteps.includes(step.id);
+        const isCurrent = currentStep === step.id;
+        const Icon = step.icon;
+        
+        return (
+          <React.Fragment key={step.id}>
+            <div className="flex flex-col items-center">
+              <motion.div
+                className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-300
+                  ${isCompleted 
+                    ? 'bg-emerald-500 text-white' 
+                    : isCurrent 
+                      ? 'bg-emerald-100 text-emerald-600 ring-2 ring-emerald-500 ring-offset-2' 
+                      : 'bg-gray-100 text-gray-400'}
+                `}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {isCompleted ? (
+                  <Check className="w-5 h-5" />
+                ) : (
+                  <Icon className="w-5 h-5" />
+                )}
+              </motion.div>
+              <span className={`
+                mt-2 text-xs font-medium
+                ${isCurrent ? 'text-emerald-600' : isCompleted ? 'text-emerald-500' : 'text-gray-400'}
+              `}>
+                {step.label}
+              </span>
+            </div>
+            
+            {index < steps.length - 1 && (
+              <div className="flex-1 mx-2">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-emerald-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: isCompleted ? '100%' : '0%' }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
