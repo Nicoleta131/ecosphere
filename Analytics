@@ -1,0 +1,384 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { base44 } from '@/api/base44Client';
+import { useQuery } from '@tanstack/react-query';
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  TrendingDown, Target, Calendar, Leaf, TreeDeciduous,
+  BarChart3, PieChart, Activity, Zap
+} from 'lucide-react';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart as RechartsPie, Pie, Cell, BarChart, Bar, Legend
+} from 'recharts';
+
+import FootprintChart from '../components/analytics/FootprintChart';
+import StatsCard from '../components/dashboard/StatsCard';
+
+const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
+
+export default function Analytics() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await base44.auth.me();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
+
+  const { data: profile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
+      return profiles[0] || null;
+    },
+    enabled: !!user
+  });
+
+  const { data: footprints = [] } = useQuery({
+    queryKey: ['footprints'],
+    queryFn: async () => {
+      return base44.entities.CarbonFootprint.filter(
+        { created_by: user?.email, completed: true },
+        '-created_date'
+      );
+    },
+    enabled: !!user
+  });
+
+  const { data: dailyLogs = [] } = useQuery({
+    queryKey: ['dailyLogs'],
+    queryFn: async () => {
+      return base44.entities.DailyLog.filter(
+        { created_by: user?.email },
+        '-date',
+        30
+      );
+    },
+    enabled: !!user
+  });
+
+  const { data: userChallenges = [] } = useQuery({
+    queryKey: ['userChallenges'],
+    queryFn: async () => {
+      return base44.entities.UserChallenge.filter({ created_by: user?.email });
+    },
+    enabled: !!user
+  });
+
+  const latestFootprint = footprints[0];
+  
+  // Prepare monthly trend data
+  const monthlyData = footprints.slice(0, 6).reverse().map(fp => ({
+    month: new Date(fp.created_date).toLocaleDateString('en-US', { month: 'short' }),
+    co2: fp.total_co2_kg || 0
+  }));
+
+  // Category breakdown
+  const categoryBreakdown = latestFootprint ? [
+    { name: 'Housing', value: latestFootprint.housing?.co2_kg || 0 },
+    { name: 'Transport', value: latestFootprint.transport?.co2_kg || 0 },
+    { name: 'Lifestyle', value: latestFootprint.lifestyle?.co2_kg || 0 }
+  ] : [];
+
+  // Daily activity data
+  const activityData = dailyLogs.slice(0, 7).reverse().map(log => ({
+    date: new Date(log.date).toLocaleDateString('en-US', { weekday: 'short' }),
+    points: log.eco_points_earned || 0,
+    challenges: log.challenges_completed || 0,
+    co2Saved: log.co2_saved_kg || 0
+  }));
+
+  // Challenge completion stats
+  const completedChallenges = userChallenges.filter(uc => uc.status === 'completed').length;
+  const totalChallenges = userChallenges.length;
+  const completionRate = totalChallenges > 0 ? Math.round((completedChallenges / totalChallenges) * 100) : 0;
+
+  // Calculate improvements
+  const totalCO2Saved = profile?.total_co2_saved || 0;
+  const treesEquivalent = Math.round(totalCO2Saved / 21); // ~21kg CO2 per tree per year
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 rounded-xl shadow-lg border">
+          <p className="font-semibold text-gray-900">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} style={{ color: entry.color }} className="text-sm">
+              {entry.name}: {entry.value}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 mb-4">
+            <BarChart3 className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-black text-gray-900">Analytics & Insights</h1>
+          <p className="text-gray-500 mt-1">Track your environmental progress</p>
+        </motion.div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <StatsCard 
+            icon={Leaf} 
+            label="Total CO₂ Saved" 
+            value={`${(totalCO2Saved / 1000).toFixed(1)}t`}
+            color="emerald"
+            delay={0.1}
+          />
+          <StatsCard 
+            icon={TreeDeciduous} 
+            label="Trees Equivalent" 
+            value={treesEquivalent}
+            subValue="planted"
+            color="emerald"
+            delay={0.2}
+          />
+          <StatsCard 
+            icon={Target} 
+            label="Completion Rate" 
+            value={`${completionRate}%`}
+            color="blue"
+            delay={0.3}
+          />
+          <StatsCard 
+            icon={Zap} 
+            label="Total Points" 
+            value={(profile?.eco_points || 0).toLocaleString()}
+            color="orange"
+            delay={0.4}
+          />
+        </div>
+
+        {/* Main Charts */}
+        <Tabs defaultValue="footprint" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
+            <TabsTrigger value="footprint" className="gap-2">
+              <PieChart className="w-4 h-4" />
+              Footprint
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="gap-2">
+              <Activity className="w-4 h-4" />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="forecast" className="gap-2">
+              <TrendingDown className="w-4 h-4" />
+              Forecast
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="footprint">
+            <div className="grid md:grid-cols-2 gap-6">
+              <FootprintChart monthlyData={monthlyData} />
+              <FootprintChart categoryBreakdown={categoryBreakdown} type="pie" />
+            </div>
+
+            {latestFootprint && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6"
+              >
+                <Card className="p-6 bg-gradient-to-br from-slate-50 to-gray-100">
+                  <h3 className="font-bold text-gray-900 mb-4">Detailed Breakdown</h3>
+                  <div className="grid md:grid-cols-3 gap-6">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-3">🏠 Housing</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Electricity</span>
+                          <span className="font-medium">{latestFootprint.housing?.electricity_kwh || 0} kWh/mo</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Heating</span>
+                          <span className="font-medium capitalize">{latestFootprint.housing?.heating_type?.replace('_', ' ') || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Water</span>
+                          <span className="font-medium">{latestFootprint.housing?.water_liters || 0} L/day</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-3">🚗 Transport</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Car</span>
+                          <span className="font-medium">{latestFootprint.transport?.car_km || 0} km/yr</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Public Transit</span>
+                          <span className="font-medium">{latestFootprint.transport?.public_transport_km || 0} km/wk</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Flights</span>
+                          <span className="font-medium">
+                            {(latestFootprint.transport?.flights_short || 0) + 
+                             (latestFootprint.transport?.flights_medium || 0) + 
+                             (latestFootprint.transport?.flights_long || 0)}/yr
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-3">🛒 Lifestyle</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Diet</span>
+                          <span className="font-medium capitalize">{latestFootprint.lifestyle?.diet_type?.replace('_', ' ') || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Shopping</span>
+                          <span className="font-medium capitalize">{latestFootprint.lifestyle?.shopping_frequency || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Screen Time</span>
+                          <span className="font-medium">{latestFootprint.lifestyle?.digital_hours || 0} hrs/day</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <Card className="p-6 bg-white">
+              <h3 className="font-bold text-gray-900 mb-4">Weekly Activity</h3>
+              <div className="h-80">
+                {activityData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={activityData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                      <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="points" name="Eco Points" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="challenges" name="Challenges" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <Activity className="w-12 h-12 mb-2 opacity-30" />
+                    <p>No activity data yet</p>
+                    <p className="text-xs">Complete challenges to see your progress</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="forecast">
+            <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingDown className="w-5 h-5 text-indigo-500" />
+                Future Projection
+              </h3>
+              
+              {latestFootprint ? (
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-600 mb-4">If you continue current habits:</h4>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-white rounded-xl">
+                        <p className="text-sm text-gray-500">In 1 Year</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {((latestFootprint.total_co2_kg || 0) / 1000).toFixed(1)} tons CO₂
+                        </p>
+                      </div>
+                      <div className="p-4 bg-white rounded-xl">
+                        <p className="text-sm text-gray-500">In 5 Years</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {(((latestFootprint.total_co2_kg || 0) * 5) / 1000).toFixed(1)} tons CO₂
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-600 mb-4">With 20% reduction:</h4>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <p className="text-sm text-emerald-600">In 1 Year</p>
+                        <p className="text-2xl font-bold text-emerald-700">
+                          {(((latestFootprint.total_co2_kg || 0) * 0.8) / 1000).toFixed(1)} tons CO₂
+                        </p>
+                        <p className="text-xs text-emerald-500 mt-1">
+                          Save {(((latestFootprint.total_co2_kg || 0) * 0.2) / 1000).toFixed(1)} tons
+                        </p>
+                      </div>
+                      <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <p className="text-sm text-emerald-600">In 5 Years</p>
+                        <p className="text-2xl font-bold text-emerald-700">
+                          {(((latestFootprint.total_co2_kg || 0) * 0.8 * 5) / 1000).toFixed(1)} tons CO₂
+                        </p>
+                        <p className="text-xs text-emerald-500 mt-1">
+                          Save {(((latestFootprint.total_co2_kg || 0) * 0.2 * 5) / 1000).toFixed(1)} tons
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <Target className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                  <p>Complete your footprint calculation first</p>
+                  <p className="text-xs">to see your future projections</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Climate Facts */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-8"
+        >
+          <Card className="p-6 bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+            <h3 className="font-bold text-lg mb-4">💡 Did You Know?</h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <p className="text-white/80 text-sm">
+                  The average person produces about <strong>4-8 tons</strong> of CO₂ per year, depending on their country.
+                </p>
+              </div>
+              <div>
+                <p className="text-white/80 text-sm">
+                  A single tree absorbs about <strong>21 kg of CO₂</strong> per year. That's why planting trees matters!
+                </p>
+              </div>
+              <div>
+                <p className="text-white/80 text-sm">
+                  Reducing meat consumption by 50% can save up to <strong>700 kg CO₂</strong> annually.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
