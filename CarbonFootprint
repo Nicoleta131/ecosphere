@@ -1,0 +1,95 @@
+{
+  "name": "CarbonFootprint",
+  "type": "object",
+  "properties": {
+    "year": {
+      "type": "number",
+      "description": "Calculation year"
+    },
+    "month": {
+      "type": "number",
+      "description": "Calculation month"
+    },
+    "housing": {
+      "type": "object",
+      "properties": {
+        "electricity_kwh": {
+          "type": "number"
+        },
+        "heating_type": {
+          "type": "string"
+        },
+        "heating_usage": {
+          "type": "number"
+        },
+        "water_liters": {
+          "type": "number"
+        },
+        "household_size": {
+          "type": "number"
+        },
+        "co2_kg": {
+          "type": "number"
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "properties": {
+        "car_km": {
+          "type": "number"
+        },
+        "car_fuel_type": {
+          "type": "string"
+        },
+        "public_transport_km": {
+          "type": "number"
+        },
+        "flights_short": {
+          "type": "number"
+        },
+        "flights_medium": {
+          "type": "number"
+        },
+        "flights_long": {
+          "type": "number"
+        },
+        "co2_kg": {
+          "type": "number"
+        }
+      }
+    },
+    "lifestyle": {
+      "type": "object",
+      "properties": {
+        "diet_type": {
+          "type": "string"
+        },
+        "shopping_frequency": {
+          "type": "string"
+        },
+        "digital_hours": {
+          "type": "number"
+        },
+        "co2_kg": {
+          "type": "number"
+        }
+      }
+    },
+    "total_co2_kg": {
+      "type": "number",
+      "description": "Total annual CO2 in kg"
+    },
+    "monthly_co2_kg": {
+      "type": "number",
+      "description": "Monthly CO2 in kg"
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "year"
+  ]
+}
