@@ -1,0 +1,138 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Zap, Flame, Droplets, Users } from 'lucide-react';
+
+export default function HousingSection({ data, onChange }) {
+  const handleChange = (field, value) => {
+    onChange({ ...data, [field]: value });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-6"
+    >
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">Housing & Energy</h2>
+        <p className="text-gray-500 mt-1">Tell us about your home energy usage</p>
+      </div>
+
+      {/* Electricity */}
+      <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6 border border-yellow-100">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-yellow-600" />
+          </div>
+          <div>
+            <Label className="text-base font-semibold text-gray-900">Electricity Usage</Label>
+            <p className="text-xs text-gray-500">Monthly kWh consumption</p>
+          </div>
+        </div>
+        <Input
+          type="number"
+          placeholder="e.g., 300"
+          value={data.electricity_kwh || ''}
+          onChange={(e) => handleChange('electricity_kwh', parseFloat(e.target.value) || 0)}
+          className="bg-white/80 border-yellow-200 focus:border-yellow-400"
+        />
+        <p className="text-xs text-gray-400 mt-2">Average household: 250-400 kWh/month</p>
+      </div>
+
+      {/* Heating */}
+      <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-6 border border-red-100">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+            <Flame className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <Label className="text-base font-semibold text-gray-900">Heating Type</Label>
+            <p className="text-xs text-gray-500">Primary heating source</p>
+          </div>
+        </div>
+        <Select 
+          value={data.heating_type || ''} 
+          onValueChange={(value) => handleChange('heating_type', value)}
+        >
+          <SelectTrigger className="bg-white/80 border-red-200">
+            <SelectValue placeholder="Select heating type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="natural_gas">Natural Gas</SelectItem>
+            <SelectItem value="electric">Electric</SelectItem>
+            <SelectItem value="district">District Heating</SelectItem>
+            <SelectItem value="oil">Oil/Petroleum</SelectItem>
+            <SelectItem value="wood">Wood/Biomass</SelectItem>
+            <SelectItem value="heat_pump">Heat Pump</SelectItem>
+            <SelectItem value="solar">Solar Thermal</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Water */}
+      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-100">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+            <Droplets className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <Label className="text-base font-semibold text-gray-900">Water Usage</Label>
+            <p className="text-xs text-gray-500">Daily liters per person</p>
+          </div>
+          <span className="text-lg font-bold text-blue-600">{data.water_liters || 100}L</span>
+        </div>
+        <Slider
+          value={[data.water_liters || 100]}
+          onValueChange={([value]) => handleChange('water_liters', value)}
+          min={50}
+          max={300}
+          step={10}
+          className="mt-2"
+        />
+        <div className="flex justify-between text-xs text-gray-400 mt-2">
+          <span>Minimal (50L)</span>
+          <span>Average (150L)</span>
+          <span>High (300L)</span>
+        </div>
+      </div>
+
+      {/* Household Size */}
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+            <Users className="w-5 h-5 text-purple-600" />
+          </div>
+          <div className="flex-1">
+            <Label className="text-base font-semibold text-gray-900">Household Size</Label>
+            <p className="text-xs text-gray-500">Number of people</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5, '6+'].map((num) => (
+            <motion.button
+              key={num}
+              type="button"
+              onClick={() => handleChange('household_size', typeof num === 'number' ? num : 6)}
+              className={`
+                flex-1 py-3 rounded-xl font-semibold transition-all
+                ${(data.household_size === num || (num === '6+' && data.household_size >= 6))
+                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-200'
+                  : 'bg-white text-gray-600 border border-purple-200 hover:border-purple-400'
+                }
+              `}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {num}
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
