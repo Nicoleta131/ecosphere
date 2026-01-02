@@ -1,0 +1,316 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Target, Calendar, Trophy, Flame, Car, Utensils, Lightbulb, 
+  Leaf, Heart, Users, CheckCircle, Star, Zap
+} from 'lucide-react';
+
+import ChallengeCard from '../components/challenges/ChallengeCard';
+
+const categories = [
+  { id: 'all', label: 'All', icon: Target },
+  { id: 'transport', label: 'Transport', icon: Car },
+  { id: 'food', label: 'Food', icon: Utensils },
+  { id: 'energy', label: 'Energy', icon: Lightbulb },
+  { id: 'lifestyle', label: 'Lifestyle', icon: Leaf },
+  { id: 'health', label: 'Health', icon: Heart },
+  { id: 'community', label: 'Community', icon: Users },
+];
+
+export default function Challenges() {
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeTab, setActiveTab] = useState('daily');
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await base44.auth.me();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
+
+  const { data: profile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
+      return profiles[0] || null;
+    },
+    enabled: !!user
+  });
+
+  const { data: challenges = [] } = useQuery({
+    queryKey: ['challenges'],
+    queryFn: () => base44.entities.Challenge.filter({ is_active: true })
+  });
+
+  const { data: userChallenges = [] } = useQuery({
+    queryKey: ['userChallenges'],
+    queryFn: async () => {
+      return base44.entities.UserChallenge.filter({ created_by: user?.email });
+    },
+    enabled: !!user
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async (challenge) => {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Create or update user challenge
+      const existing = userChallenges.find(uc => 
+        uc.challenge_id === challenge.id && uc.assigned_date === today
+      );
+      
+      if (existing) {
+        await base44.entities.UserChallenge.update(existing.id, {
+          status: 'completed',
+          completed_date: today,
+          points_earned: challenge.eco_points
+        });
+      } else {
+        await base44.entities.UserChallenge.create({
+          challenge_id: challenge.id,
+          assigned_date: today,
+          status: 'completed',
+          completed_date: today,
+          points_earned: challenge.eco_points
+        });
+      }
+      
+      // Update profile
+      if (profile) {
+        const newStreak = profile.current_streak || 0;
+        await base44.entities.UserProfile.update(profile.id, {
+          eco_points: (profile.eco_points || 0) + challenge.eco_points,
+          total_co2_saved: (profile.total_co2_saved || 0) + (challenge.co2_saved_kg || 0),
+          trees_planted: Math.floor(((profile.eco_points || 0) + challenge.eco_points) / 100),
+          current_streak: newStreak + 1,
+          longest_streak: Math.max(profile.longest_streak || 0, newStreak + 1),
+          last_active_date: today
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['userChallenges']);
+      queryClient.invalidateQueries(['userProfile']);
+    }
+  });
+
+  const today = new Date().toISOString().split('T')[0];
+  
+  const filteredChallenges = challenges.filter(c => 
+    activeCategory === 'all' || c.category === activeCategory
+  );
+
+  const dailyChallenges = filteredChallenges.filter(c => c.frequency === 'daily');
+  const weeklyChallenges = filteredChallenges.filter(c => c.frequency === 'weekly');
+  const oneTimeChallenges = filteredChallenges.filter(c => c.frequency === 'one-time');
+
+  const getChallengeStatus = (challenge) => {
+    const userChallenge = userChallenges.find(uc => 
+      uc.challenge_id === challenge.id && 
+      (challenge.frequency === 'daily' ? uc.assigned_date === today : true)
+    );
+    return userChallenge?.status || 'active';
+  };
+
+  const completedToday = userChallenges.filter(uc => 
+    uc.status === 'completed' && uc.completed_date === today
+  ).length;
+
+  const totalPoints = userChallenges
+    .filter(uc => uc.status === 'completed')
+    .reduce((sum, uc) => sum + (uc.points_earned || 0), 0);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50">
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-500 mb-4">
+            <Target className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-black text-gray-900">Eco Challenges</h1>
+          <p className="text-gray-500 mt-1">Small actions, big impact</p>
+        </motion.div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100 text-center">
+              <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-emerald-600">{completedToday}</p>
+              <p className="text-xs text-gray-500">Completed Today</p>
+            </Card>
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="p-4 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100 text-center">
+              <Flame className="w-6 h-6 text-orange-500 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-orange-600">{profile?.current_streak || 0}</p>
+              <p className="text-xs text-gray-500">Day Streak</p>
+            </Card>
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-100 text-center">
+              <Zap className="w-6 h-6 text-yellow-500 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-yellow-600">{totalPoints.toLocaleString()}</p>
+              <p className="text-xs text-gray-500">Total Points</p>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Category Filter */}
+        <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          {categories.map((cat) => {
+            const Icon = cat.icon;
+            const isActive = activeCategory === cat.id;
+            return (
+              <motion.button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`
+                  flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all
+                  ${isActive 
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' 
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-emerald-300'
+                  }
+                `}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Icon className="w-4 h-4" />
+                {cat.label}
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Challenges Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="daily" className="gap-2">
+              <Calendar className="w-4 h-4" />
+              Daily
+            </TabsTrigger>
+            <TabsTrigger value="weekly" className="gap-2">
+              <Target className="w-4 h-4" />
+              Weekly
+            </TabsTrigger>
+            <TabsTrigger value="special" className="gap-2">
+              <Star className="w-4 h-4" />
+              Special
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="daily">
+            <div className="space-y-4">
+              <AnimatePresence>
+                {dailyChallenges.length > 0 ? (
+                  dailyChallenges.map((challenge, index) => (
+                    <motion.div
+                      key={challenge.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <ChallengeCard
+                        challenge={challenge}
+                        status={getChallengeStatus(challenge)}
+                        onComplete={() => completeMutation.mutate(challenge)}
+                      />
+                    </motion.div>
+                  ))
+                ) : (
+                  <Card className="p-12 text-center">
+                    <Calendar className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-500">No daily challenges in this category</p>
+                  </Card>
+                )}
+              </AnimatePresence>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="weekly">
+            <div className="space-y-4">
+              <AnimatePresence>
+                {weeklyChallenges.length > 0 ? (
+                  weeklyChallenges.map((challenge, index) => (
+                    <motion.div
+                      key={challenge.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <ChallengeCard
+                        challenge={challenge}
+                        status={getChallengeStatus(challenge)}
+                        onComplete={() => completeMutation.mutate(challenge)}
+                      />
+                    </motion.div>
+                  ))
+                ) : (
+                  <Card className="p-12 text-center">
+                    <Target className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-500">No weekly challenges in this category</p>
+                  </Card>
+                )}
+              </AnimatePresence>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="special">
+            <div className="space-y-4">
+              <AnimatePresence>
+                {oneTimeChallenges.length > 0 ? (
+                  oneTimeChallenges.map((challenge, index) => (
+                    <motion.div
+                      key={challenge.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <ChallengeCard
+                        challenge={challenge}
+                        status={getChallengeStatus(challenge)}
+                        onComplete={() => completeMutation.mutate(challenge)}
+                      />
+                    </motion.div>
+                  ))
+                ) : (
+                  <Card className="p-12 text-center">
+                    <Star className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-500">No special challenges in this category</p>
+                  </Card>
+                )}
+              </AnimatePresence>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
