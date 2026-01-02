@@ -1,0 +1,58 @@
+{
+  "name": "Challenge",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "transport",
+        "food",
+        "energy",
+        "lifestyle",
+        "health",
+        "community"
+      ]
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ]
+    },
+    "eco_points": {
+      "type": "number"
+    },
+    "co2_saved_kg": {
+      "type": "number",
+      "description": "Estimated CO2 saved"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "frequency": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "one-time"
+      ]
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "title",
+    "category",
+    "eco_points"
+  ]
+}
