@@ -1,0 +1,60 @@
+{
+  "name": "UserProfile",
+  "type": "object",
+  "properties": {
+    "username": {
+      "type": "string",
+      "description": "Display name"
+    },
+    "avatar_url": {
+      "type": "string",
+      "description": "Profile picture URL"
+    },
+    "eco_points": {
+      "type": "number",
+      "default": 0,
+      "description": "Total eco points earned"
+    },
+    "current_streak": {
+      "type": "number",
+      "default": 0,
+      "description": "Current daily streak"
+    },
+    "longest_streak": {
+      "type": "number",
+      "default": 0,
+      "description": "Longest streak achieved"
+    },
+    "planet_level": {
+      "type": "number",
+      "default": 1,
+      "description": "Planet evolution level"
+    },
+    "trees_planted": {
+      "type": "number",
+      "default": 0
+    },
+    "animals_unlocked": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "total_co2_saved": {
+      "type": "number",
+      "default": 0,
+      "description": "Total kg CO2 saved"
+    },
+    "last_active_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "location": {
+      "type": "string",
+      "description": "User city/region"
+    }
+  },
+  "required": [
+    "username"
+  ]
+}
