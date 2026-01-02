@@ -1,0 +1,36 @@
+{
+  "name": "DailyLog",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "steps": {
+      "type": "number",
+      "default": 0
+    },
+    "eco_points_earned": {
+      "type": "number",
+      "default": 0
+    },
+    "challenges_completed": {
+      "type": "number",
+      "default": 0
+    },
+    "co2_saved_kg": {
+      "type": "number",
+      "default": 0
+    },
+    "planet_health_change": {
+      "type": "number",
+      "description": "Positive or negative change"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "date"
+  ]
+}
