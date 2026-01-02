@@ -1,0 +1,177 @@
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Home, Calculator, Globe2, Target, BarChart3, Trophy, User,
+  Menu, X, Leaf
+} from 'lucide-react';
+
+const navItems = [
+  { name: 'Home', icon: Home, page: 'Home' },
+  { name: 'Calculator', icon: Calculator, page: 'Calculator' },
+  { name: 'Planet', icon: Globe2, page: 'Planet' },
+  { name: 'Challenges', icon: Target, page: 'Challenges' },
+  { name: 'Analytics', icon: BarChart3, page: 'Analytics' },
+  { name: 'Leaderboard', icon: Trophy, page: 'Leaderboard' },
+  { name: 'Profile', icon: User, page: 'Profile' },
+];
+
+export default function Layout({ children, currentPageName }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Desktop Sidebar */}
+      <nav className="hidden lg:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 bg-white border-r border-gray-100 shadow-sm z-50">
+        {/* Logo */}
+        <Link to={createPageUrl('Home')} className="mb-8">
+          <motion.div 
+            className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-200"
+            whileHover={{ scale: 1.05, rotate: 5 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Leaf className="w-6 h-6 text-white" />
+          </motion.div>
+        </Link>
+
+        {/* Nav Items */}
+        <div className="flex-1 flex flex-col items-center gap-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentPageName === item.page;
+            
+            return (
+              <Link
+                key={item.page}
+                to={createPageUrl(item.page)}
+                className="relative group"
+              >
+                <motion.div
+                  className={`
+                    w-12 h-12 rounded-xl flex items-center justify-center transition-all
+                    ${isActive 
+                      ? 'bg-emerald-100 text-emerald-600' 
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    }
+                  `}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Icon className="w-5 h-5" />
+                </motion.div>
+                
+                {/* Tooltip */}
+                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  {item.name}
+                </div>
+                
+                {/* Active indicator */}
+                {isActive && (
+                  <motion.div
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-emerald-500 rounded-l-full"
+                    layoutId="activeIndicator"
+                  />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Mobile Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-lg border-b border-gray-100 z-50 px-4">
+        <div className="h-full flex items-center justify-between">
+          <Link to={createPageUrl('Home')} className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+              <Leaf className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-gray-900">EcoTracker</span>
+          </Link>
+          
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="lg:hidden fixed top-16 left-0 right-0 bg-white border-b border-gray-100 z-40 shadow-lg"
+          >
+            <div className="p-4 grid grid-cols-4 gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentPageName === item.page;
+                
+                return (
+                  <Link
+                    key={item.page}
+                    to={createPageUrl(item.page)}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`
+                      flex flex-col items-center gap-1 p-3 rounded-xl transition-all
+                      ${isActive 
+                        ? 'bg-emerald-100 text-emerald-600' 
+                        : 'text-gray-500 hover:bg-gray-100'
+                      }
+                    `}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-xs font-medium">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 z-50 safe-area-inset-bottom">
+        <div className="flex justify-around py-2">
+          {navItems.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const isActive = currentPageName === item.page;
+            
+            return (
+              <Link
+                key={item.page}
+                to={createPageUrl(item.page)}
+                className={`
+                  flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all
+                  ${isActive 
+                    ? 'text-emerald-600' 
+                    : 'text-gray-400'
+                  }
+                `}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{item.name}</span>
+                {isActive && (
+                  <motion.div 
+                    className="absolute bottom-1 w-1 h-1 bg-emerald-500 rounded-full"
+                    layoutId="mobileActiveIndicator"
+                  />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="lg:ml-20 pt-16 lg:pt-0 pb-20 lg:pb-0">
+        {children}
+      </main>
+    </div>
+  );
+}
