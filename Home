@@ -1,0 +1,320 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Leaf, Zap, TreeDeciduous, Trophy, ArrowRight, Target, 
+  Flame, TrendingDown, Plus, Calendar
+} from 'lucide-react';
+
+import VirtualPlanet from '../components/planet/VirtualPlanet';
+import StatsCard from '../components/dashboard/StatsCard';
+import StreakBanner from '../components/dashboard/StreakBanner';
+import ChallengeCard from '../components/challenges/ChallengeCard';
+
+export default function Home() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [checkingProfile, setCheckingProfile] = useState(true);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await base44.auth.me();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
+      return profiles[0] || null;
+    },
+    enabled: !!user
+  });
+
+  useEffect(() => {
+    if (!profileLoading && user && profile === null) {
+      navigate(createPageUrl('Onboarding'));
+    }
+    if (!profileLoading) {
+      setCheckingProfile(false);
+    }
+  }, [profile, profileLoading, user, navigate]);
+
+  const { data: challenges = [] } = useQuery({
+    queryKey: ['challenges'],
+    queryFn: () => base44.entities.Challenge.filter({ is_active: true })
+  });
+
+  const { data: userChallenges = [] } = useQuery({
+    queryKey: ['userChallenges'],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      return base44.entities.UserChallenge.filter({ 
+        assigned_date: today,
+        created_by: user?.email 
+      });
+    },
+    enabled: !!user
+  });
+
+  const { data: footprint } = useQuery({
+    queryKey: ['latestFootprint'],
+    queryFn: async () => {
+      const footprints = await base44.entities.CarbonFootprint.filter(
+        { created_by: user?.email, completed: true },
+        '-created_date',
+        1
+      );
+      return footprints[0] || null;
+    },
+    enabled: !!user
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async (challenge) => {
+      const userChallenge = userChallenges.find(uc => uc.challenge_id === challenge.id);
+      if (userChallenge) {
+        await base44.entities.UserChallenge.update(userChallenge.id, {
+          status: 'completed',
+          completed_date: new Date().toISOString().split('T')[0],
+          points_earned: challenge.eco_points
+        });
+      }
+      
+      if (profile) {
+        await base44.entities.UserProfile.update(profile.id, {
+          eco_points: (profile.eco_points || 0) + challenge.eco_points,
+          total_co2_saved: (profile.total_co2_saved || 0) + (challenge.co2_saved_kg || 0),
+          trees_planted: Math.floor(((profile.eco_points || 0) + challenge.eco_points) / 100)
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['userChallenges']);
+      queryClient.invalidateQueries(['userProfile']);
+    }
+  });
+
+  const todayChallenges = challenges.slice(0, 3);
+  const completedToday = userChallenges.filter(uc => uc.status === 'completed').length;
+
+  const planetHealth = profile ? Math.min(100, 50 + (profile.eco_points || 0) / 50) : 50;
+  const trees = profile?.trees_planted || 0;
+  const animals = profile?.animals_unlocked || [];
+
+  if (checkingProfile || profileLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50 flex items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+        >
+          <Leaf className="w-12 h-12 text-emerald-500" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-2">
+            Welcome back{profile?.username ? `, ${profile.username}` : ''}! 🌍
+          </h1>
+          <p className="text-gray-500">Every action shapes your planet</p>
+        </motion.div>
+
+        {/* Main Grid */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Left Column - Planet */}
+          <div className="space-y-6">
+            {/* Planet Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card className="p-8 bg-gradient-to-br from-white to-emerald-50/50 border-emerald-100">
+                <div className="text-center mb-4">
+                  <h2 className="text-lg font-bold text-gray-800">Your Planet</h2>
+                  <p className="text-sm text-gray-500">Level {profile?.planet_level || 1}</p>
+                </div>
+                <VirtualPlanet 
+                  planetHealth={planetHealth}
+                  trees={trees}
+                  animals={animals.length > 0 ? animals : ['bird']}
+                  ecoPoints={profile?.eco_points || 0}
+                />
+                <div className="mt-6 flex justify-center gap-4">
+                  <Link to={createPageUrl('Planet')}>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <TreeDeciduous className="w-4 h-4" />
+                      Visit Planet
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 gap-4">
+              <StatsCard 
+                icon={Zap} 
+                label="Eco Points" 
+                value={(profile?.eco_points || 0).toLocaleString()}
+                color="emerald"
+                delay={0.3}
+              />
+              <StatsCard 
+                icon={TreeDeciduous} 
+                label="Trees Planted" 
+                value={trees}
+                subValue="virtual"
+                color="emerald"
+                delay={0.4}
+              />
+              <StatsCard 
+                icon={TrendingDown} 
+                label="CO₂ Saved" 
+                value={`${((profile?.total_co2_saved || 0) / 1000).toFixed(1)}t`}
+                color="blue"
+                delay={0.5}
+              />
+              <StatsCard 
+                icon={Target} 
+                label="Challenges" 
+                value={completedToday}
+                subValue={`/ ${todayChallenges.length} today`}
+                color="purple"
+                delay={0.6}
+              />
+            </div>
+          </div>
+
+          {/* Right Column - Challenges & Actions */}
+          <div className="space-y-6">
+            {/* Streak Banner */}
+            <StreakBanner 
+              streak={profile?.current_streak || 0}
+              longestStreak={profile?.longest_streak || 0}
+            />
+
+            {/* Today's Challenges */}
+            <Card className="p-5 bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-500" />
+                  <h3 className="font-bold text-gray-900">Today's Challenges</h3>
+                </div>
+                <Link to={createPageUrl('Challenges')}>
+                  <Button variant="ghost" size="sm" className="gap-1 text-emerald-600">
+                    View All <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="space-y-3">
+                {todayChallenges.length > 0 ? (
+                  todayChallenges.map((challenge, index) => {
+                    const userChallenge = userChallenges.find(uc => uc.challenge_id === challenge.id);
+                    const status = userChallenge?.status || 'active';
+                    
+                    return (
+                      <ChallengeCard
+                        key={challenge.id}
+                        challenge={challenge}
+                        status={status}
+                        onComplete={() => completeMutation.mutate(challenge)}
+                        compact
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <Leaf className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p>No challenges available</p>
+                    <p className="text-xs">Check back tomorrow!</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 gap-4">
+              <Link to={createPageUrl('Calculator')}>
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Card className="p-5 bg-gradient-to-br from-blue-500 to-cyan-600 text-white cursor-pointer h-full">
+                    <Target className="w-8 h-8 mb-3" />
+                    <h3 className="font-bold">Calculate Footprint</h3>
+                    <p className="text-white/70 text-sm mt-1">
+                      {footprint ? 'Update your calculation' : 'Start measuring'}
+                    </p>
+                  </Card>
+                </motion.div>
+              </Link>
+              
+              <Link to={createPageUrl('Analytics')}>
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Card className="p-5 bg-gradient-to-br from-purple-500 to-violet-600 text-white cursor-pointer h-full">
+                    <TrendingDown className="w-8 h-8 mb-3" />
+                    <h3 className="font-bold">View Analytics</h3>
+                    <p className="text-white/70 text-sm mt-1">Track your progress</p>
+                  </Card>
+                </motion.div>
+              </Link>
+            </div>
+
+            {/* Footprint Summary */}
+            {footprint && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+              >
+                <Card className="p-5 bg-gradient-to-br from-gray-50 to-slate-100">
+                  <h3 className="font-bold text-gray-900 mb-3">Your Carbon Footprint</h3>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-3xl font-black text-gray-900">
+                      {((footprint.total_co2_kg || 0) / 1000).toFixed(1)}
+                    </span>
+                    <span className="text-gray-500">tons CO₂/year</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                      style={{ width: `${Math.min((footprint.total_co2_kg / 10000) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Sustainable target: 2 tons/year
+                  </p>
+                </Card>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
