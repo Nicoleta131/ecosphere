@@ -1,0 +1,36 @@
+{
+  "name": "UserChallenge",
+  "type": "object",
+  "properties": {
+    "challenge_id": {
+      "type": "string",
+      "description": "Reference to Challenge"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "failed",
+        "skipped"
+      ],
+      "default": "active"
+    },
+    "assigned_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "points_earned": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "challenge_id",
+    "assigned_date"
+  ]
+}
