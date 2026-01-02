@@ -1,0 +1,304 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { base44 } from '@/api/base44Client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, ArrowRight, Leaf, Loader2 } from 'lucide-react';
+
+import CalculatorProgress from '../components/calculator/CalculatorProgress';
+import HousingSection from '../components/calculator/HousingSection';
+import TransportSection from '../components/calculator/TransportSection';
+import LifestyleSection from '../components/calculator/LifestyleSection';
+import ResultsView from '../components/calculator/ResultsView';
+
+const CO2_FACTORS = {
+  electricity: 0.4, // kg per kWh
+  heating: {
+    natural_gas: 2.0, // kg per m³
+    electric: 0.3,
+    district: 0.15,
+    oil: 2.5,
+    wood: 0.1,
+    heat_pump: 0.15,
+    solar: 0.05
+  },
+  water: 0.001, // kg per liter
+  car: {
+    petrol: 0.21, // kg per km
+    diesel: 0.17,
+    hybrid: 0.12,
+    electric: 0.05,
+    none: 0
+  },
+  public_transport: 0.05, // kg per km
+  flights: {
+    short: 250, // kg per flight
+    medium: 600,
+    long: 2500
+  },
+  diet: {
+    heavy_meat: 3300, // kg per year
+    regular_meat: 2500,
+    flexitarian: 1800,
+    vegetarian: 1200,
+    vegan: 800
+  },
+  shopping: {
+    minimal: 200,
+    moderate: 500,
+    frequent: 1000,
+    heavy: 2000
+  },
+  digital: 50 // kg per daily hour per year
+};
+
+export default function Calculator() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState(null);
+  const [currentStep, setCurrentStep] = useState('housing');
+  const [completedSteps, setCompletedSteps] = useState([]);
+  const [showResults, setShowResults] = useState(false);
+  
+  const [housing, setHousing] = useState({
+    electricity_kwh: '',
+    heating_type: '',
+    water_liters: 100,
+    household_size: 2
+  });
+  
+  const [transport, setTransport] = useState({
+    car_km: '',
+    car_fuel_type: '',
+    public_transport_km: 0,
+    flights_short: 0,
+    flights_medium: 0,
+    flights_long: 0
+  });
+  
+  const [lifestyle, setLifestyle] = useState({
+    diet_type: '',
+    shopping_frequency: '',
+    digital_hours: 4
+  });
+
+  const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await base44.auth.me();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
+
+  const calculateCO2 = () => {
+    const householdFactor = 1 / (housing.household_size || 1);
+    
+    // Housing calculations
+    const electricityCO2 = (parseFloat(housing.electricity_kwh) || 0) * 12 * CO2_FACTORS.electricity * householdFactor;
+    const heatingCO2 = 1500 * (CO2_FACTORS.heating[housing.heating_type] || 0.5) * householdFactor;
+    const waterCO2 = (housing.water_liters || 0) * 365 * CO2_FACTORS.water * householdFactor;
+    const housingTotal = electricityCO2 + heatingCO2 + waterCO2;
+
+    // Transport calculations
+    const carCO2 = (parseFloat(transport.car_km) || 0) * (CO2_FACTORS.car[transport.car_fuel_type] || 0);
+    const publicTransportCO2 = (transport.public_transport_km || 0) * 52 * CO2_FACTORS.public_transport;
+    const flightsCO2 = 
+      (transport.flights_short || 0) * CO2_FACTORS.flights.short +
+      (transport.flights_medium || 0) * CO2_FACTORS.flights.medium +
+      (transport.flights_long || 0) * CO2_FACTORS.flights.long;
+    const transportTotal = carCO2 + publicTransportCO2 + flightsCO2;
+
+    // Lifestyle calculations
+    const dietCO2 = CO2_FACTORS.diet[lifestyle.diet_type] || 2000;
+    const shoppingCO2 = CO2_FACTORS.shopping[lifestyle.shopping_frequency] || 500;
+    const digitalCO2 = (lifestyle.digital_hours || 0) * CO2_FACTORS.digital;
+    const lifestyleTotal = dietCO2 + shoppingCO2 + digitalCO2;
+
+    const total = Math.round(housingTotal + transportTotal + lifestyleTotal);
+
+    return {
+      housing: { ...housing, co2_kg: Math.round(housingTotal) },
+      transport: { ...transport, co2_kg: Math.round(transportTotal) },
+      lifestyle: { ...lifestyle, co2_kg: Math.round(lifestyleTotal) },
+      total_co2_kg: total,
+      monthly_co2_kg: Math.round(total / 12)
+    };
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (calculatedResults) => {
+      const year = new Date().getFullYear();
+      const month = new Date().getMonth() + 1;
+      
+      await base44.entities.CarbonFootprint.create({
+        year,
+        month,
+        ...calculatedResults,
+        completed: true
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['latestFootprint']);
+    }
+  });
+
+  const handleNext = () => {
+    if (currentStep === 'housing') {
+      setCompletedSteps([...completedSteps, 'housing']);
+      setCurrentStep('transport');
+    } else if (currentStep === 'transport') {
+      setCompletedSteps([...completedSteps, 'transport']);
+      setCurrentStep('lifestyle');
+    } else if (currentStep === 'lifestyle') {
+      setCompletedSteps([...completedSteps, 'lifestyle']);
+      const calculatedResults = calculateCO2();
+      setResults(calculatedResults);
+      saveMutation.mutate(calculatedResults);
+      setShowResults(true);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep === 'transport') {
+      setCurrentStep('housing');
+      setCompletedSteps(completedSteps.filter(s => s !== 'housing'));
+    } else if (currentStep === 'lifestyle') {
+      setCurrentStep('transport');
+      setCompletedSteps(completedSteps.filter(s => s !== 'transport'));
+    }
+  };
+
+  const canProceed = () => {
+    if (currentStep === 'housing') {
+      return housing.electricity_kwh && housing.heating_type;
+    }
+    if (currentStep === 'transport') {
+      return transport.car_fuel_type;
+    }
+    if (currentStep === 'lifestyle') {
+      return lifestyle.diet_type && lifestyle.shopping_frequency;
+    }
+    return false;
+  };
+
+  if (showResults && results) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50">
+        <div className="max-w-2xl mx-auto px-4 py-8">
+          <ResultsView results={results} />
+          <div className="mt-6 flex justify-center gap-4">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowResults(false);
+                setCurrentStep('housing');
+                setCompletedSteps([]);
+              }}
+            >
+              Recalculate
+            </Button>
+            <Button 
+              onClick={() => navigate(createPageUrl('Home'))}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Leaf className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-teal-50">
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 mb-4">
+            <Leaf className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Carbon Footprint Calculator</h1>
+          <p className="text-gray-500 mt-1">Understand your environmental impact</p>
+        </motion.div>
+
+        {/* Progress */}
+        <CalculatorProgress 
+          currentStep={currentStep}
+          completedSteps={completedSteps}
+        />
+
+        {/* Form Sections */}
+        <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 mb-6">
+          <AnimatePresence mode="wait">
+            {currentStep === 'housing' && (
+              <HousingSection 
+                key="housing"
+                data={housing} 
+                onChange={setHousing} 
+              />
+            )}
+            {currentStep === 'transport' && (
+              <TransportSection 
+                key="transport"
+                data={transport} 
+                onChange={setTransport} 
+              />
+            )}
+            {currentStep === 'lifestyle' && (
+              <LifestyleSection 
+                key="lifestyle"
+                data={lifestyle} 
+                onChange={setLifestyle} 
+              />
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex justify-between">
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            disabled={currentStep === 'housing'}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+          
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed() || saveMutation.isPending}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+          >
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Calculating...
+              </>
+            ) : currentStep === 'lifestyle' ? (
+              <>
+                Calculate Results
+                <Leaf className="w-4 h-4" />
+              </>
+            ) : (
+              <>
+                Next
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
